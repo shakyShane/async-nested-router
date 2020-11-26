@@ -1,41 +1,44 @@
-import React, { useState, useEffect } from 'react';
-import logo from './logo.svg';
+import React, { useContext } from 'react';
 import './App.css';
+import { Outlet, RouterContext } from './Router';
+import { inspect } from '@xstate/inspect';
 
-interface AppProps {}
+inspect({ iframe: false });
 
-function App({}: AppProps) {
-  // Create the count state.
-  const [count, setCount] = useState(0);
-  // Create the counter (+1 every second).
-  useEffect(() => {
-    const timer = setTimeout(() => setCount(count + 1), 1000);
-    return () => clearTimeout(timer);
-  }, [count, setCount]);
-  // Return the App component.
-  return (
-    <div className="App">
-      <header className="App-header">
-        <img src={logo} className="App-logo" alt="logo" />
-        <p>
-          Edit <code>src/App.tsx</code> and save to reload.
-        </p>
-        <p>
-          Page has been open for <code>{count}</code> seconds.
-        </p>
-        <p>
-          <a
-            className="App-link"
-            href="https://reactjs.org"
-            target="_blank"
-            rel="noopener noreferrer"
-          >
-            Learn React
-          </a>
-        </p>
-      </header>
-    </div>
-  );
+export default function App() {
+    const path = '/user/orders/12';
+    return (
+        <main>
+            <Outlet>
+                <User />
+                <Outlet>
+                    <Order />
+                    <Outlet>
+                        <Item />
+                    </Outlet>
+                </Outlet>
+                <Outlet>
+                    <Order />
+                    <Outlet>
+                        <Item />
+                    </Outlet>
+                </Outlet>
+            </Outlet>
+        </main>
+    );
 }
 
-export default App;
+function User() {
+    const { prev } = useContext(RouterContext);
+    return <p>User {prev}</p>;
+}
+
+function Order() {
+    const { prev } = useContext(RouterContext);
+    return <p>Order {prev}</p>;
+}
+
+function Item() {
+    const { prev } = useContext(RouterContext);
+    return <p>Item {prev}</p>;
+}

@@ -7,8 +7,12 @@
     "lint": "prettier --check \"src/**/*.{js,jsx,ts,tsx}\""
   },
   "dependencies": {
+    "@xstate/inspect": "0.2.0",
+    "@xstate/react": "1.0.3",
     "react": "^17.0.0",
-    "react-dom": "^17.0.0"
+    "react-dom": "^17.0.0",
+    "uuid": "8.3.1",
+    "xstate": "4.14.1"
   },
   "devDependencies": {
     "@snowpack/plugin-dotenv": "^2.0.4",
