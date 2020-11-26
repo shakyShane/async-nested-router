@@ -3,8 +3,10 @@ import { assign, Machine, send } from 'xstate';
 import { v4 as uuidv4 } from 'uuid';
 import { useMachine, useService } from '@xstate/react';
 import { createContext, PropsWithChildren, useContext, useMemo } from 'react';
+import { createBrowserHistory, History } from 'history';
 
 type Context = {
+    depth: number;
     resolveData: {
         loading: boolean;
         data: ResolveData;
@@ -28,12 +30,13 @@ type ResolveData = {
     params: Record<string, any>;
 };
 
-const m = (id: string) =>
+const m = (id: string, depth: number) =>
     Machine<Context>(
         {
             id,
             initial: 'resolving',
             context: {
+                depth: depth,
                 resolveData: {
                     loading: false,
                     data: {
@@ -48,9 +51,12 @@ const m = (id: string) =>
                     error: null,
                 },
             },
+            on: {
+                HISTORY_EVT: [{ target: 'loadingData', cond: 'matchedDepth' }],
+            },
             states: {
                 resolving: {
-                    entry: ['assignResolveLoading', 'triggerResolve'],
+                    entry: ['assignResolveLoading'],
                     on: {
                         RESOLVED: {
                             target: 'loadingData',
@@ -72,8 +78,12 @@ const m = (id: string) =>
             },
         },
         {
+            guards: {
+                matchedDepth: (ctx, evt) => {
+                    return true;
+                },
+            },
             actions: {
-                triggerResolve: send('TRIGGER_RESOLVE'),
                 assignResolveLoading: assign({
                     resolveData: (ctx) => {
                         return {
@@ -131,12 +141,13 @@ const noopDataLoader = () => Promise.resolve({});
 const noopResolver = () => Promise.resolve({});
 export function RouterProvider(props: PropsWithChildren<ProviderProps>) {
     const { dataLoader = noopDataLoader, resolver } = props;
+    const { history } = useContext(BaseRouterContext);
     const { send: parentSend, service: parentService, prev } = useContext(
         RouterContext,
     );
     const currentDepth = parentSend === null ? 0 : prev + 1;
     const machine = useMemo(
-        () => m(`router-${currentDepth}-${uuidv4().slice(0, 6)}`),
+        () => m(`router-${currentDepth}-${uuidv4().slice(0, 6)}`, currentDepth),
         [currentDepth],
     );
     const dataLoaderWrapped = useCallback(
@@ -156,22 +167,35 @@ export function RouterProvider(props: PropsWithChildren<ProviderProps>) {
             dataLoader: dataLoaderWrapped,
         },
     });
-    const [localCmp, setCmp] = useState(false);
+    const [pathname, setCmp] = useState(history.location.pathname);
     useEffect(() => {
-        const sub = service.subscribe((x) => {
-            if (x.event.type === 'TRIGGER_RESOLVE') {
-                setCmp(true);
+        let prev = history.location.pathname;
+        const unlisten = history.listen(({ location, action }) => {
+            console.log('--------');
+            console.log('prev->', prev);
+            console.log(action, location.pathname, location.state);
+            const segs1 = prev.slice(1).split('/');
+            const segs2 = location.pathname.slice(1).split('/');
+            for (let i = 0; i <= currentDepth; i++) {
+                if (segs1[i] !== segs2[i]) {
+                    if (i === currentDepth) {
+                        send({ type: 'HISTORY_EVT' });
+                    }
+                }
             }
+            prev = location.pathname;
         });
-        return () => sub.unsubscribe();
-    }, [resolver, service]);
+        return () => {
+            unlisten();
+        };
+    }, [currentDepth, history, resolver, service]);
     const api = useMemo(() => {
         return { send, service, prev: currentDepth };
     }, [send, service, currentDepth]);
     const MaybeLazyComponent: any = useMemo(() => {
-        if (resolver && localCmp) {
+        if (resolver && pathname) {
             return React.lazy(() =>
-                resolver('/users/orders/12').then((x: any) => {
+                resolver(pathname).then((x: any) => {
                     const { component, ...rest } = x;
                     send('RESOLVED', { data: rest });
                     return x.component;
@@ -179,10 +203,10 @@ export function RouterProvider(props: PropsWithChildren<ProviderProps>) {
             );
         }
         return null;
-    }, [localCmp, send, resolver]);
+    }, [pathname, send, resolver]);
     return (
         <RouterContext.Provider value={api}>
-            {resolver && localCmp && (
+            {resolver && pathname && (
                 <React.Suspense
                     fallback={(props.fallback && props.fallback()) || '...'}
                 >
@@ -199,13 +223,18 @@ type RouterProps = {
     dataLoader: () => Promise<any>;
 };
 
-export function Router(props: PropsWithChildren<RouterProps>) {
+const bh = createBrowserHistory();
+const BaseRouterContext = createContext<{ history: History }>({
+    history: bh,
+});
+export function BaseRouter(props: PropsWithChildren<any>) {
+    const api = useMemo(() => {
+        return { history: bh };
+    }, []);
     return (
-        <RouterProvider dataLoader={props.dataLoader} resolver={props.resolver}>
-            <div style={{ padding: '20px', border: '1px dotted red' }}>
-                {props.children}
-            </div>
-        </RouterProvider>
+        <BaseRouterContext.Provider value={api as any}>
+            {props.children}
+        </BaseRouterContext.Provider>
     );
 }
 
@@ -229,5 +258,17 @@ export function useResolveData() {
 }
 
 export function Link(props: PropsWithChildren<any>) {
-    return <a href={props.to}>{props.children}</a>;
+    const { history } = useContext(BaseRouterContext);
+    const onClick = useCallback(
+        (evt) => {
+            evt.preventDefault();
+            history.push(evt.target.pathname);
+        },
+        [history],
+    );
+    return (
+        <a href={props.to} onClick={onClick}>
+            {props.children}
+        </a>
+    );
 }

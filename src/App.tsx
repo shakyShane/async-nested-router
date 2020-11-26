@@ -1,6 +1,6 @@
 import React from 'react';
 import './App.css';
-import { Resolver, RouterProvider } from './Router';
+import { BaseRouter, Resolver, RouterProvider } from './Router';
 import { inspect } from '@xstate/inspect';
 
 inspect({ iframe: false });
@@ -24,25 +24,27 @@ const fallback = () => 'please wait....';
 export default function App() {
     const path = '/user/orders/12';
     return (
-        <main>
-            <code>PATH: `/user/orders/12`</code>
-            <RouterProvider
-                dataLoader={dataLoader1}
-                resolver={resolver1}
-                fallback={fallback}
-            />
-            {/*<Router>*/}
-            {/*    <OrdersPage name={'first'} />*/}
-            {/*    <Router>*/}
-            {/*        <ItemPage name={'item 1'} />*/}
-            {/*    </Router>*/}
-            {/*</Router>*/}
-            {/*<Router>*/}
-            {/*    <OrdersPage name={'second'} />*/}
-            {/*    <Router>*/}
-            {/*        <ItemPage name={'item 2'} />*/}
-            {/*    </Router>*/}
-            {/*</Router>*/}
-        </main>
+        <BaseRouter>
+            <main>
+                <code>PATH: `/user/orders/12`</code>
+                <RouterProvider
+                    dataLoader={dataLoader1}
+                    resolver={resolver1}
+                    fallback={fallback}
+                />
+                {/*<Router>*/}
+                {/*    <OrdersPage name={'first'} />*/}
+                {/*    <Router>*/}
+                {/*        <ItemPage name={'item 1'} />*/}
+                {/*    </Router>*/}
+                {/*</Router>*/}
+                {/*<Router>*/}
+                {/*    <OrdersPage name={'second'} />*/}
+                {/*    <Router>*/}
+                {/*        <ItemPage name={'item 2'} />*/}
+                {/*    </Router>*/}
+                {/*</Router>*/}
+            </main>
+        </BaseRouter>
     );
 }
