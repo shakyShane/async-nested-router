@@ -32,6 +32,7 @@ export default function App() {
                     dataLoader={dataLoader1}
                     resolver={resolver1}
                     fallback={fallback}
+                    seg={'user'}
                 />
                 {/*<Router>*/}
                 {/*    <OrdersPage name={'first'} />*/}

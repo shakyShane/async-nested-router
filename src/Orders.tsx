@@ -1,6 +1,7 @@
 import React from 'react';
 import { matchPath } from 'react-router';
 import {
+    DataLoader,
     Link,
     Resolver,
     RouterProvider,
@@ -10,12 +11,20 @@ import {
 
 const waiter = () => new Promise((res) => setTimeout(res, 1000));
 
-const resolver1: Resolver = async (pathname) => {
-    console.log(pathname);
-    const output = matchPath(pathname, '/user/orders/:id');
+const dataLoader1: DataLoader = (args) => {
+    return new Promise((res) =>
+        setTimeout(
+            () => res([{ name: 'tshirt', price: 'here', id: args.params?.id }]),
+            1000,
+        ),
+    );
+};
+
+const resolver1: Resolver = async (loc) => {
+    const output = matchPath(loc.pathname, '/user/orders/:id');
     await waiter();
     return {
-        component: await import('./Order'),
+        component: (await import('./Order')).default,
         query: {},
         params: output ? output.params : {},
     };
@@ -34,9 +43,15 @@ export function UsersPage() {
             <ul>
                 <li>
                     <Link to={'/user/orders/13'}>Order 13</Link>
+                    <Link to={'/user/orders/12'}>Order 12</Link>
                 </li>
             </ul>
-            <RouterProvider resolver={resolver1} fallback={fallback} />
+            <RouterProvider
+                dataLoader={dataLoader1}
+                resolver={resolver1}
+                fallback={fallback}
+                seg={':id'}
+            />
         </div>
     );
 }

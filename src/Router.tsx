@@ -1,13 +1,16 @@
-import React, { useCallback, useEffect, useState } from 'react';
-import { assign, Machine, send } from 'xstate';
+import React, { useCallback, useEffect } from 'react';
+import { assign, Machine } from 'xstate';
 import { v4 as uuidv4 } from 'uuid';
 import { useMachine, useService } from '@xstate/react';
 import { createContext, PropsWithChildren, useContext, useMemo } from 'react';
 import { createBrowserHistory, History } from 'history';
+import { matchPath } from 'react-router';
 
 type Context = {
     location: History['location'];
     depth: number;
+    parents: string[];
+    seg: string;
     component: null | any;
     resolveData: {
         loading: boolean;
@@ -21,9 +24,17 @@ type Context = {
     };
 };
 
+// prettier-ignore
+type Events =
+    | { type: "xstate.init"; }
+    | { type: "HISTORY_EVT"; location: History["location"] }
+
 export type Resolver = (
     location: History['location'],
 ) => Promise<ResolveResult>;
+
+export type DataLoader = (resolve: ResolveData) => Promise<any>;
+
 type ResolveResult = {
     component: any;
     query: Record<string, any>;
@@ -36,17 +47,22 @@ type ResolveData = {
 
 const createRouterMachine = (
     id: string,
+    parents: string[],
+    seg: string,
     depth: number,
     location: History['location'],
     resolver?: Resolver,
+    dataLoader?: DataLoader,
 ) =>
-    Machine<Context>(
+    Machine<Context, Record<string, any>, Events>(
         {
             id,
             initial: 'resolving',
             context: {
                 location,
                 depth: depth,
+                seg,
+                parents,
                 component: null,
                 resolveData: {
                     loading: false,
@@ -63,7 +79,7 @@ const createRouterMachine = (
                 },
             },
             on: {
-                HISTORY_EVT: [{ target: 'loadingData', cond: 'matchedDepth' }],
+                HISTORY_EVT: [{ target: 'resolving', cond: 'matchedDepth' }],
             },
             states: {
                 resolving: {
@@ -82,7 +98,7 @@ const createRouterMachine = (
                 loadingData: {
                     entry: 'assignDataLoading',
                     invoke: {
-                        src: 'dataLoader',
+                        src: 'loadData',
                         onDone: {
                             target: 'dataLoaded',
                             actions: 'assignRouteData',
@@ -95,7 +111,28 @@ const createRouterMachine = (
         {
             guards: {
                 matchedDepth: (ctx, evt) => {
-                    return true;
+                    switch (evt.type) {
+                        case 'HISTORY_EVT': {
+                            const split = evt.location.pathname
+                                .slice(1)
+                                .split('/');
+                            const joined =
+                                '/' + ctx.parents.concat(ctx.seg).join('/');
+                            const output = matchPath(
+                                evt.location.pathname,
+                                joined,
+                            );
+                            if (output && !output.isExact) {
+                                return false;
+                            }
+                            if (output && output.isExact) {
+                                return true;
+                            }
+                            return false;
+                        }
+                        default:
+                            return false;
+                    }
                 },
             },
             services: {
@@ -103,7 +140,22 @@ const createRouterMachine = (
                     if (!resolver) {
                         return null;
                     }
-                    const output = await resolver(ctx.location);
+                    const subject = (() => {
+                        switch (evt.type) {
+                            case 'xstate.init':
+                                return ctx.location;
+                            case 'HISTORY_EVT':
+                                return evt.location;
+                        }
+                    })();
+                    const output = await resolver(subject);
+                    return output;
+                },
+                loadData: async (ctx, evt) => {
+                    if (!dataLoader) {
+                        return null;
+                    }
+                    const output = await dataLoader(ctx.resolveData.data);
                     return output;
                 },
             },
@@ -155,65 +207,57 @@ export const RouterContext = createContext<{
     send: any;
     service: any;
     prev: number;
+    parents: string[];
 }>({
     send: null,
     service: null,
     prev: 0,
+    parents: [],
 });
 
 type ProviderProps = {
-    dataLoader?: () => Promise<any>;
+    dataLoader?: DataLoader;
     resolver?: Resolver;
     fallback?: () => React.ReactNode;
+    seg: string;
 };
 const noopDataLoader = () => Promise.resolve({});
 const noopResolver = () => Promise.resolve({});
 export function RouterProvider(props: PropsWithChildren<ProviderProps>) {
-    const { dataLoader = noopDataLoader, resolver } = props;
+    const { dataLoader = noopDataLoader, resolver, seg } = props;
     const { history } = useContext(BaseRouterContext);
-    const { send: parentSend, service: parentService, prev } = useContext(
-        RouterContext,
-    );
+    const {
+        send: parentSend,
+        service: parentService,
+        prev,
+        parents,
+    } = useContext(RouterContext);
     const currentDepth = parentSend === null ? 0 : prev + 1;
     const machine = useMemo(() => {
         return createRouterMachine(
-            `router-${currentDepth}-${uuidv4().slice(0, 6)}`,
+            `router-${parents.concat(props.seg).join('/')}-${uuidv4().slice(
+                0,
+                6,
+            )}`,
+            parents,
+            seg,
             currentDepth,
             history.location,
             resolver,
+            dataLoader,
         );
-    }, [currentDepth, history.location, resolver]);
-    const dataLoaderWrapped = useCallback(
-        (ctx, evt) => {
-            return dataLoader();
-        },
-        [dataLoader],
-    );
+    }, [currentDepth, dataLoader, history.location, parents, resolver, seg]);
     // const resolverWrapped = useCallback(() => {
     //     return resolver();
     // }, [resolver]);
     const [state, send, service] = useMachine(machine, {
         devTools: true,
         parent: parentService,
-        actions: {},
-        services: {
-            dataLoader: dataLoaderWrapped,
-        },
     });
 
     useEffect(() => {
-        let prev = history.location.pathname;
         const unlisten = history.listen(({ location, action }) => {
-            const segs1 = prev.slice(1).split('/');
-            const segs2 = location.pathname.slice(1).split('/');
-            for (let i = 0; i <= currentDepth; i++) {
-                if (segs1[i] !== segs2[i]) {
-                    if (i === currentDepth) {
-                        send({ type: 'HISTORY_EVT' });
-                    }
-                }
-            }
-            prev = location.pathname;
+            send({ type: 'HISTORY_EVT', location });
         });
         return () => {
             unlisten();
@@ -221,25 +265,14 @@ export function RouterProvider(props: PropsWithChildren<ProviderProps>) {
     }, [currentDepth, history, resolver, send, service]);
 
     const api = useMemo(() => {
-        return { send, service, prev: currentDepth };
-    }, [send, service, currentDepth]);
+        return {
+            send,
+            service,
+            prev: currentDepth,
+            parents: parents.concat(props.seg),
+        };
+    }, [send, service, currentDepth, parents, props.seg]);
 
-    // /**
-    //  *
-    //  */
-    // const MaybeLazyComponent: any = useMemo(() => {
-    //     if (resolver && pathname) {
-    //         console.log('resolving...');
-    //         return React.lazy(() =>
-    //             resolver(pathname).then((x: any) => {
-    //                 const { component, ...rest } = x;
-    //                 send('RESOLVED', { data: rest });
-    //                 return x.component;
-    //             }),
-    //         );
-    //     }
-    //     return null;
-    // }, [pathname, send, resolver]);
     return (
         <RouterContext.Provider value={api}>
             <pre>

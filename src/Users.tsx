@@ -16,7 +16,7 @@ const dataLoader1 = () =>
 const resolver1: Resolver = async (args) => {
     await waiter();
     return {
-        component: import('./Orders'),
+        component: (await import('./Orders')).default,
         query: {},
         params: {},
     };
@@ -33,11 +33,12 @@ export function UsersPage() {
             <pre>routeData: {JSON.stringify(data)}</pre>
             <pre>resolveData: {JSON.stringify(resolve)}</pre>
 
-            {/*<RouterProvider*/}
-            {/*    dataLoader={dataLoader1}*/}
-            {/*    resolver={resolver1}*/}
-            {/*    fallback={fallback}*/}
-            {/*/>*/}
+            <RouterProvider
+                dataLoader={dataLoader1}
+                resolver={resolver1}
+                fallback={fallback}
+                seg={'orders'}
+            />
         </div>
     );
 }
