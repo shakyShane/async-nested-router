@@ -11,9 +11,10 @@ const dataLoader1 = () =>
     new Promise((res) => setTimeout(() => res({ name: 'shane' }), 1000));
 
 const resolver1: Resolver = async (args) => {
+    console.log(args);
     await waiter();
     return {
-        component: import('./Users'),
+        component: (await import('./Users')).default,
         query: {},
         params: {},
     };

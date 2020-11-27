@@ -33,11 +33,11 @@ export function UsersPage() {
             <pre>routeData: {JSON.stringify(data)}</pre>
             <pre>resolveData: {JSON.stringify(resolve)}</pre>
 
-            <RouterProvider
-                dataLoader={dataLoader1}
-                resolver={resolver1}
-                fallback={fallback}
-            />
+            {/*<RouterProvider*/}
+            {/*    dataLoader={dataLoader1}*/}
+            {/*    resolver={resolver1}*/}
+            {/*    fallback={fallback}*/}
+            {/*/>*/}
         </div>
     );
 }

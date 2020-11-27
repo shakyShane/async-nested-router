@@ -1,4 +1,5 @@
 import React from 'react';
+import { matchPath } from 'react-router';
 import {
     Link,
     Resolver,
@@ -9,14 +10,14 @@ import {
 
 const waiter = () => new Promise((res) => setTimeout(res, 1000));
 
-const resolver1: Resolver = async (args) => {
+const resolver1: Resolver = async (pathname) => {
+    console.log(pathname);
+    const output = matchPath(pathname, '/user/orders/:id');
     await waiter();
     return {
-        component: import('./Order'),
+        component: await import('./Order'),
         query: {},
-        params: {
-            id: 12,
-        },
+        params: output ? output.params : {},
     };
 };
 

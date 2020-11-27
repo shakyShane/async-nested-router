@@ -6,7 +6,9 @@ import { createContext, PropsWithChildren, useContext, useMemo } from 'react';
 import { createBrowserHistory, History } from 'history';
 
 type Context = {
+    location: History['location'];
     depth: number;
+    component: null | any;
     resolveData: {
         loading: boolean;
         data: ResolveData;
@@ -19,7 +21,9 @@ type Context = {
     };
 };
 
-export type Resolver = (pathname: string) => Promise<ResolveResult>;
+export type Resolver = (
+    location: History['location'],
+) => Promise<ResolveResult>;
 type ResolveResult = {
     component: any;
     query: Record<string, any>;
@@ -30,13 +34,20 @@ type ResolveData = {
     params: Record<string, any>;
 };
 
-const m = (id: string, depth: number) =>
+const createRouterMachine = (
+    id: string,
+    depth: number,
+    location: History['location'],
+    resolver?: Resolver,
+) =>
     Machine<Context>(
         {
             id,
             initial: 'resolving',
             context: {
+                location,
                 depth: depth,
+                component: null,
                 resolveData: {
                     loading: false,
                     data: {
@@ -57,10 +68,14 @@ const m = (id: string, depth: number) =>
             states: {
                 resolving: {
                     entry: ['assignResolveLoading'],
-                    on: {
-                        RESOLVED: {
+                    invoke: {
+                        src: 'resolveComponent',
+                        onDone: {
                             target: 'loadingData',
-                            actions: 'assignResolveData',
+                            actions: [
+                                'assignResolveData',
+                                'assignResolvedComponent',
+                            ],
                         },
                     },
                 },
@@ -83,7 +98,21 @@ const m = (id: string, depth: number) =>
                     return true;
                 },
             },
+            services: {
+                resolveComponent: async (ctx, evt) => {
+                    if (!resolver) {
+                        return null;
+                    }
+                    const output = await resolver(ctx.location);
+                    return output;
+                },
+            },
             actions: {
+                assignResolvedComponent: assign({
+                    component: (x, evt) => {
+                        return evt.data.component;
+                    },
+                }),
                 assignResolveLoading: assign({
                     resolveData: (ctx) => {
                         return {
@@ -146,10 +175,14 @@ export function RouterProvider(props: PropsWithChildren<ProviderProps>) {
         RouterContext,
     );
     const currentDepth = parentSend === null ? 0 : prev + 1;
-    const machine = useMemo(
-        () => m(`router-${currentDepth}-${uuidv4().slice(0, 6)}`, currentDepth),
-        [currentDepth],
-    );
+    const machine = useMemo(() => {
+        return createRouterMachine(
+            `router-${currentDepth}-${uuidv4().slice(0, 6)}`,
+            currentDepth,
+            history.location,
+            resolver,
+        );
+    }, [currentDepth, history.location, resolver]);
     const dataLoaderWrapped = useCallback(
         (ctx, evt) => {
             return dataLoader();
@@ -167,13 +200,10 @@ export function RouterProvider(props: PropsWithChildren<ProviderProps>) {
             dataLoader: dataLoaderWrapped,
         },
     });
-    const [pathname, setCmp] = useState(history.location.pathname);
+
     useEffect(() => {
         let prev = history.location.pathname;
         const unlisten = history.listen(({ location, action }) => {
-            console.log('--------');
-            console.log('prev->', prev);
-            console.log(action, location.pathname, location.state);
             const segs1 = prev.slice(1).split('/');
             const segs2 = location.pathname.slice(1).split('/');
             for (let i = 0; i <= currentDepth; i++) {
@@ -188,31 +218,36 @@ export function RouterProvider(props: PropsWithChildren<ProviderProps>) {
         return () => {
             unlisten();
         };
-    }, [currentDepth, history, resolver, service]);
+    }, [currentDepth, history, resolver, send, service]);
+
     const api = useMemo(() => {
         return { send, service, prev: currentDepth };
     }, [send, service, currentDepth]);
-    const MaybeLazyComponent: any = useMemo(() => {
-        if (resolver && pathname) {
-            return React.lazy(() =>
-                resolver(pathname).then((x: any) => {
-                    const { component, ...rest } = x;
-                    send('RESOLVED', { data: rest });
-                    return x.component;
-                }),
-            );
-        }
-        return null;
-    }, [pathname, send, resolver]);
+
+    // /**
+    //  *
+    //  */
+    // const MaybeLazyComponent: any = useMemo(() => {
+    //     if (resolver && pathname) {
+    //         console.log('resolving...');
+    //         return React.lazy(() =>
+    //             resolver(pathname).then((x: any) => {
+    //                 const { component, ...rest } = x;
+    //                 send('RESOLVED', { data: rest });
+    //                 return x.component;
+    //             }),
+    //         );
+    //     }
+    //     return null;
+    // }, [pathname, send, resolver]);
     return (
         <RouterContext.Provider value={api}>
-            {resolver && pathname && (
-                <React.Suspense
-                    fallback={(props.fallback && props.fallback()) || '...'}
-                >
-                    <MaybeLazyComponent />
-                </React.Suspense>
-            )}
+            <pre>
+                <code>value: {state.value}</code>
+            </pre>
+            {state.context.component
+                ? React.createElement(state.context.component)
+                : null}
             {props.children}
         </RouterContext.Provider>
     );
