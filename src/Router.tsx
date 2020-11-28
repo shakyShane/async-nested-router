@@ -5,6 +5,8 @@ import { useMachine, useService } from '@xstate/react';
 import { createContext, PropsWithChildren, useContext, useMemo } from 'react';
 import { createBrowserHistory, History } from 'history';
 import { matchPath } from 'react-router';
+import debugpkg from 'debug';
+const debug = debugpkg('router');
 
 type Context = {
     location: History['location'];
@@ -122,9 +124,19 @@ const createRouterMachine = (
                                 joined,
                             );
                             if (output && !output.isExact) {
+                                debug(
+                                    'not an exact match, depth: %d, %o',
+                                    ctx.depth,
+                                    ctx.seg,
+                                );
                                 return false;
                             }
                             if (output && output.isExact) {
+                                debug(
+                                    'exact match, depth: %o %o',
+                                    ctx.depth,
+                                    ctx.seg,
+                                );
                                 return true;
                             }
                             return false;
