@@ -1,18 +1,11 @@
 import React from 'react';
-import {
-    Link,
-    Resolver,
-    RouterProvider,
-    useResolveData,
-    useRouteData,
-} from './Router';
+import { DataLoader, Link, Resolver, RouterProvider, useResolveData, useRouteData } from './Router';
 
 const waiter = () => new Promise((res) => setTimeout(res, 1000));
 
-const dataLoader1 = () => {
-    return new Promise((res) =>
-        setTimeout(() => res([{ name: 'tshirt', price: 'here' }]), 1000),
-    );
+const dataLoader1: DataLoader = (data) => {
+    console.log('data loading', data);
+    return new Promise((res) => setTimeout(() => res([{ name: 'tshirt', price: 'here' }]), 1000));
 };
 
 const resolver1: Resolver = async (location, depth) => {
@@ -40,7 +33,7 @@ const resolver1: Resolver = async (location, depth) => {
     }
 
     return {
-        component: (await match).default,
+        component: (await (match as any)).default,
         query: {},
         params: {},
     };
@@ -54,14 +47,15 @@ export function UsersPage() {
     return (
         <div style={{ padding: '20px', border: '1px dotted red' }}>
             <h1>Users Page</h1>
-            <pre>routeData: {JSON.stringify(data)}</pre>
             <pre>resolveData: {JSON.stringify(resolve)}</pre>
+            <pre>routeData: {JSON.stringify(data)}</pre>
 
             <RouterProvider
                 dataLoader={dataLoader1}
                 resolver={resolver1}
                 fallback={fallback}
-                seg={'orders'}
+                segs={['orders', 'dashboard']}
+                current={'orders'}
             />
         </div>
     );

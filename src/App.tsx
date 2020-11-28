@@ -7,8 +7,7 @@ inspect({ iframe: false });
 
 const waiter = () => new Promise((res) => setTimeout(res, 1000));
 
-const dataLoader1 = () =>
-    new Promise((res) => setTimeout(() => res({ name: 'shane' }), 1000));
+const dataLoader1 = () => new Promise((res) => setTimeout(() => res({ name: 'shane' }), 1000));
 
 const resolver1: Resolver = async (args) => {
     await waiter();
@@ -31,7 +30,8 @@ export default function App() {
                     dataLoader={dataLoader1}
                     resolver={resolver1}
                     fallback={fallback}
-                    seg={'user'}
+                    segs={['user']}
+                    current={'user'}
                 />
                 {/*<Router>*/}
                 {/*    <OrdersPage name={'first'} />*/}

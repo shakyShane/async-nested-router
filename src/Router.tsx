@@ -11,8 +11,9 @@ const debug = debugpkg('router');
 type Context = {
     location: History['location'];
     depth: number;
-    parents: string[];
-    seg: string;
+    parents: Array<string>;
+    segs: string[];
+    current: string;
     component: null | any;
     resolveData: {
         loading: boolean;
@@ -31,10 +32,7 @@ type Events =
     | { type: "xstate.init"; }
     | { type: "HISTORY_EVT"; location: History["location"] }
 
-export type Resolver = (
-    location: History['location'],
-    depth: number,
-) => Promise<ResolveResult>;
+export type Resolver = (location: History['location'], depth: number) => Promise<ResolveResult>;
 
 export type DataLoader = (resolve: ResolveData) => Promise<any>;
 
@@ -51,8 +49,9 @@ type ResolveData = {
 
 const createRouterMachine = (
     id: string,
-    parents: string[],
-    seg: string,
+    parents: Array<string>,
+    current: string,
+    segs: string[],
     depth: number,
     location: History['location'],
     resolver?: Resolver,
@@ -65,7 +64,8 @@ const createRouterMachine = (
             context: {
                 location,
                 depth: depth,
-                seg,
+                segs,
+                current,
                 parents,
                 component: null,
                 resolveData: {
@@ -114,32 +114,9 @@ const createRouterMachine = (
                 matchedDepth: (ctx, evt) => {
                     switch (evt.type) {
                         case 'HISTORY_EVT': {
-                            const split = evt.location.pathname
-                                .slice(1)
-                                .split('/');
-                            const joined =
-                                '/' + ctx.parents.concat(ctx.seg).join('/');
-                            const output = matchPath(
-                                evt.location.pathname,
-                                joined,
-                            );
-                            if (output && !output.isExact) {
-                                debug(
-                                    'not an exact match, depth: %d, %o',
-                                    ctx.depth,
-                                    ctx.seg,
-                                );
-                                return false;
-                            }
-                            if (output && output.isExact) {
-                                debug(
-                                    'exact match, depth: %o %o',
-                                    ctx.depth,
-                                    ctx.seg,
-                                );
-                                return true;
-                            }
-                            return false;
+                            const match = guard(evt.location.pathname, ctx.depth, ctx.segs, ctx.parents);
+                            debug('depth: %o, current: %o %o = %o', ctx.depth, ctx.current, ctx.segs, match);
+                            return match;
                         }
                         default:
                             return false;
@@ -219,7 +196,7 @@ export const RouterContext = createContext<{
     send: any;
     service: any;
     prev: number;
-    parents: string[];
+    parents: Array<string>;
 }>({
     send: null,
     service: null,
@@ -231,45 +208,29 @@ type ProviderProps = {
     dataLoader?: DataLoader;
     resolver?: Resolver;
     fallback?: () => React.ReactNode;
-    seg: string;
+    segs: string[];
+    current: string;
 };
 const noopDataLoader = () => Promise.resolve({});
 const noopResolver = () => Promise.resolve({});
 export function RouterProvider(props: PropsWithChildren<ProviderProps>) {
-    const { dataLoader = noopDataLoader, resolver, seg } = props;
+    const { dataLoader = noopDataLoader, resolver, segs, current } = props;
     const { history } = useContext(BaseRouterContext);
-    const {
-        send: parentSend,
-        service: parentService,
-        prev,
-        parents,
-    } = useContext(RouterContext);
+    const { send: parentSend, service: parentService, prev, parents } = useContext(RouterContext);
     const currentDepth = parentSend === null ? 0 : prev + 1;
     const machine = useMemo(() => {
         return createRouterMachine(
-            `router-${parents.concat(props.seg).join('/')}-${uuidv4().slice(
-                0,
-                6,
-            )}`,
+            `router-${current}-${uuidv4().slice(0, 6)}`,
             parents,
-            seg,
+            current,
+            segs,
             currentDepth,
             history.location,
             resolver,
             dataLoader,
         );
-    }, [
-        currentDepth,
-        dataLoader,
-        history.location,
-        parents,
-        props.seg,
-        resolver,
-        seg,
-    ]);
-    // const resolverWrapped = useCallback(() => {
-    //     return resolver();
-    // }, [resolver]);
+    }, [currentDepth, dataLoader, history.location, parents, props.segs, resolver, segs, current]);
+
     const [state, send, service] = useMachine(machine, {
         devTools: true,
         parent: parentService,
@@ -289,18 +250,16 @@ export function RouterProvider(props: PropsWithChildren<ProviderProps>) {
             send,
             service,
             prev: currentDepth,
-            parents: parents.concat(props.seg),
+            parents: parents.concat(props.current),
         };
-    }, [send, service, currentDepth, parents, props.seg]);
+    }, [send, service, currentDepth, parents, props.segs]);
 
     return (
         <RouterContext.Provider value={api}>
             <pre>
                 <code>value: {state.value}</code>
             </pre>
-            {state.context.component
-                ? React.createElement(state.context.component)
-                : null}
+            {state.context.component ? React.createElement(state.context.component) : null}
             {props.children}
         </RouterContext.Provider>
     );
@@ -319,11 +278,7 @@ export function BaseRouter(props: PropsWithChildren<any>) {
     const api = useMemo(() => {
         return { history: bh };
     }, []);
-    return (
-        <BaseRouterContext.Provider value={api as any}>
-            {props.children}
-        </BaseRouterContext.Provider>
-    );
+    return <BaseRouterContext.Provider value={api as any}>{props.children}</BaseRouterContext.Provider>;
 }
 
 export function Outlet() {
@@ -359,4 +314,19 @@ export function Link(props: PropsWithChildren<any>) {
             {props.children}
         </a>
     );
+}
+
+export function guard(pathname: string, depth: number, segs: string[], parents: Array<string>): boolean {
+    const pathSegs = pathname.slice(1).split('/');
+    if (pathSegs.length < depth + 1) {
+        console.log('NOPE!');
+        return false;
+    }
+    const subSection = '/' + pathSegs.slice(0, depth + 1).join('/');
+    return segs.some((seg) => {
+        const joined = '/' + parents.concat(seg).join('/');
+        console.log('looking', joined);
+        const match = matchPath(pathname, joined);
+        return Boolean(match);
+    });
 }

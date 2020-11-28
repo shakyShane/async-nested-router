@@ -1,23 +1,11 @@
 import React from 'react';
 import { matchPath } from 'react-router';
-import {
-    DataLoader,
-    Link,
-    Resolver,
-    RouterProvider,
-    useResolveData,
-    useRouteData,
-} from './Router';
+import { DataLoader, Link, Resolver, RouterProvider, useResolveData, useRouteData } from './Router';
 
 const waiter = () => new Promise((res) => setTimeout(res, 1000));
 
 const dataLoader1: DataLoader = (args) => {
-    return new Promise((res) =>
-        setTimeout(
-            () => res([{ name: 'tshirt', price: 'here', id: args.params?.id }]),
-            1000,
-        ),
-    );
+    return new Promise((res) => setTimeout(() => res([{ name: 'tshirt', price: 'here', id: args.params?.id }]), 1000));
 };
 
 const resolver1: Resolver = async (loc) => {
@@ -43,11 +31,13 @@ export function UsersPage() {
                     <Link to="/user/dashboard">Dashboard</Link>
                 </li>
             </ul>
-            <pre>routeData: {JSON.stringify(data)}</pre>
             <pre>resolveData: {JSON.stringify(resolve)}</pre>
+            <pre>routeData: {JSON.stringify(data)}</pre>
             <ul>
                 <li>
                     <Link to={'/user/orders/13'}>Order 13</Link>
+                </li>
+                <li>
                     <Link to={'/user/orders/12'}>Order 12</Link>
                 </li>
             </ul>
@@ -55,7 +45,8 @@ export function UsersPage() {
                 dataLoader={dataLoader1}
                 resolver={resolver1}
                 fallback={fallback}
-                seg={':id'}
+                segs={[':id']}
+                current={':id'}
             />
         </div>
     );
