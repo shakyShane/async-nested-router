@@ -1,5 +1,5 @@
 import React, { useCallback, useEffect } from 'react';
-import { assign, Machine } from 'xstate';
+import { assign, DoneInvokeEvent, Machine } from 'xstate';
 import { v4 as uuidv4 } from 'uuid';
 import { useMachine, useService } from '@xstate/react';
 import { createContext, PropsWithChildren, useContext, useMemo } from 'react';
@@ -31,14 +31,16 @@ type Events =
 
 export type Resolver = (
     location: History['location'],
+    depth: number,
 ) => Promise<ResolveResult>;
 
 export type DataLoader = (resolve: ResolveData) => Promise<any>;
 
 type ResolveResult = {
-    component: any;
+    component?: any;
     query: Record<string, any>;
     params: Record<string, any>;
+    status?: number;
 };
 type ResolveData = {
     query: Record<string, any>;
@@ -88,10 +90,7 @@ const createRouterMachine = (
                         src: 'resolveComponent',
                         onDone: {
                             target: 'loadingData',
-                            actions: [
-                                'assignResolveData',
-                                'assignResolvedComponent',
-                            ],
+                            actions: ['assignResolveData'],
                         },
                     },
                 },
@@ -148,7 +147,7 @@ const createRouterMachine = (
                                 return evt.location;
                         }
                     })();
-                    const output = await resolver(subject);
+                    const output = await resolver(subject, ctx.depth);
                     return output;
                 },
                 loadData: async (ctx, evt) => {
@@ -160,9 +159,19 @@ const createRouterMachine = (
                 },
             },
             actions: {
-                assignResolvedComponent: assign({
+                assignResolveData: assign({
                     component: (x, evt) => {
-                        return evt.data.component;
+                        const e = evt as DoneInvokeEvent<ResolveResult>;
+                        return e.data.component;
+                    },
+                    resolveData: (ctx, evt) => {
+                        const e = evt as DoneInvokeEvent<ResolveResult>;
+                        const { component, ...rest } = e.data;
+                        return {
+                            ...ctx.resolveData,
+                            loading: false,
+                            data: rest,
+                        };
                     },
                 }),
                 assignResolveLoading: assign({
@@ -170,15 +179,6 @@ const createRouterMachine = (
                         return {
                             ...ctx.resolveData,
                             loading: true,
-                        };
-                    },
-                }),
-                assignResolveData: assign({
-                    resolveData: (ctx, evt) => {
-                        return {
-                            ...ctx.resolveData,
-                            loading: false,
-                            data: (evt as any).data,
                         };
                     },
                 }),
@@ -246,7 +246,15 @@ export function RouterProvider(props: PropsWithChildren<ProviderProps>) {
             resolver,
             dataLoader,
         );
-    }, [currentDepth, dataLoader, history.location, parents, resolver, seg]);
+    }, [
+        currentDepth,
+        dataLoader,
+        history.location,
+        parents,
+        props.seg,
+        resolver,
+        seg,
+    ]);
     // const resolverWrapped = useCallback(() => {
     //     return resolver();
     // }, [resolver]);

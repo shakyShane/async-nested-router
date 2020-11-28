@@ -38,6 +38,11 @@ export function UsersPage() {
     return (
         <div style={{ padding: '20px', border: '1px dotted red' }}>
             <h1>Orders Page</h1>
+            <ul>
+                <li>
+                    <Link to="/user/dashboard">Dashboard</Link>
+                </li>
+            </ul>
             <pre>routeData: {JSON.stringify(data)}</pre>
             <pre>resolveData: {JSON.stringify(resolve)}</pre>
             <ul>

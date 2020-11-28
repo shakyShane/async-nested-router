@@ -1,5 +1,6 @@
 import React from 'react';
 import {
+    Link,
     Resolver,
     RouterProvider,
     useResolveData,
@@ -8,15 +9,38 @@ import {
 
 const waiter = () => new Promise((res) => setTimeout(res, 1000));
 
-const dataLoader1 = () =>
-    new Promise((res) =>
+const dataLoader1 = () => {
+    return new Promise((res) =>
         setTimeout(() => res([{ name: 'tshirt', price: 'here' }]), 1000),
     );
+};
 
-const resolver1: Resolver = async (args) => {
+const resolver1: Resolver = async (location, depth) => {
     await waiter();
+
+    const upto = location.pathname.slice(1).split('/');
+    const sliced = upto[depth];
+    const match = (async () => {
+        switch (sliced) {
+            case 'orders':
+                return import('./Orders');
+            case 'dashboard':
+                return import('./Dashboard');
+            default:
+                return undefined;
+        }
+    })();
+
+    if (!match) {
+        return {
+            query: {},
+            params: {},
+            status: 404,
+        };
+    }
+
     return {
-        component: (await import('./Orders')).default,
+        component: (await match).default,
         query: {},
         params: {},
     };
