@@ -5,11 +5,12 @@ import { inspect } from '@xstate/inspect';
 
 inspect({ iframe: false });
 
-const waiter = () => new Promise((res) => setTimeout(res, 1000));
+const waiter = () => new Promise((res) => setTimeout(res, 200));
 
-const dataLoader1 = () => new Promise((res) => setTimeout(() => res({ name: 'shane' }), 1000));
+const dataLoader1 = () => new Promise((res) => setTimeout(() => res({ name: 'shane' }), 200));
 
 const resolver1: Resolver = async (args) => {
+    console.log(args);
     await waiter();
     return {
         component: (await import('./Users')).default,
@@ -25,7 +26,7 @@ export default function App() {
     return (
         <BaseRouter>
             <main>
-                <code>PATH: `/user/orders/12`</code>
+                <h1>Home</h1>
                 <RouterProvider
                     dataLoader={dataLoader1}
                     resolver={resolver1}

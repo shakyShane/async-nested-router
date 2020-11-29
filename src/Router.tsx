@@ -1,11 +1,12 @@
-import React, { useCallback, useEffect } from 'react';
-import { assign, DoneInvokeEvent, Machine } from 'xstate';
+import React, { useCallback, useEffect, useState } from 'react';
+import { assign, DoneInvokeEvent, Interpreter, Machine, send } from 'xstate';
 import { v4 as uuidv4 } from 'uuid';
 import { useMachine, useService } from '@xstate/react';
 import { createContext, PropsWithChildren, useContext, useMemo } from 'react';
-import { createBrowserHistory, History } from 'history';
+import { BrowserHistory, createBrowserHistory, History } from 'history';
 import { matchPath } from 'react-router';
 import debugpkg from 'debug';
+import { pure } from 'xstate/lib/actions';
 const debug = debugpkg('router');
 
 type Context = {
@@ -112,15 +113,7 @@ const createRouterMachine = (
         {
             guards: {
                 matchedDepth: (ctx, evt) => {
-                    switch (evt.type) {
-                        case 'HISTORY_EVT': {
-                            const match = guard(evt.location.pathname, ctx.depth, ctx.segs, ctx.parents);
-                            debug('depth: %o, current: %o %o = %o', ctx.depth, ctx.current, ctx.segs, match);
-                            return match;
-                        }
-                        default:
-                            return false;
-                    }
+                    return true;
                 },
             },
             services: {
@@ -215,7 +208,7 @@ const noopDataLoader = () => Promise.resolve({});
 const noopResolver = () => Promise.resolve({});
 export function RouterProvider(props: PropsWithChildren<ProviderProps>) {
     const { dataLoader = noopDataLoader, resolver, segs, current } = props;
-    const { history } = useContext(BaseRouterContext);
+    const { history, service: baseRouterService, send: baseRouterSend } = useContext(BaseRouterContext);
     const { send: parentSend, service: parentService, prev, parents } = useContext(RouterContext);
     const currentDepth = parentSend === null ? 0 : prev + 1;
     const machine = useMemo(() => {
@@ -229,7 +222,7 @@ export function RouterProvider(props: PropsWithChildren<ProviderProps>) {
             resolver,
             dataLoader,
         );
-    }, [currentDepth, dataLoader, history.location, parents, props.segs, resolver, segs, current]);
+    }, [currentDepth, dataLoader, history.location, parents, resolver, segs, current]);
 
     const [state, send, service] = useMachine(machine, {
         devTools: true,
@@ -237,13 +230,26 @@ export function RouterProvider(props: PropsWithChildren<ProviderProps>) {
     });
 
     useEffect(() => {
-        const unlisten = history.listen(({ location, action }) => {
-            send({ type: 'HISTORY_EVT', location });
+        const matchers: Matcher[] = [];
+        segs.forEach((seg) => {
+            const joined = '/' + parents.concat(seg).join('/');
+            matchers.push({ depth: currentDepth, path: joined });
         });
+        debug('sending matchers %o', matchers);
+        baseRouterSend({ type: 'REGISTER', matchers });
+        const listenBase = baseRouterService.subscribe((x: any) => {
+            if (x.event.type === '@external.TRIGGER_RESOLVE') {
+                if (x.event.depth === currentDepth) {
+                    send({ type: 'HISTORY_EVT', location: x.event.location });
+                }
+            }
+        });
+
         return () => {
-            unlisten();
+            baseRouterSend({ type: 'UNREGISTER', depth: currentDepth });
+            return listenBase.unsubscribe();
         };
-    }, [currentDepth, history, resolver, send, service]);
+    }, [baseRouterSend, baseRouterService, currentDepth, parents, segs, send]);
 
     const api = useMemo(() => {
         return {
@@ -252,7 +258,7 @@ export function RouterProvider(props: PropsWithChildren<ProviderProps>) {
             prev: currentDepth,
             parents: parents.concat(props.current),
         };
-    }, [send, service, currentDepth, parents, props.segs]);
+    }, [send, service, currentDepth, parents, props]);
 
     return (
         <RouterContext.Provider value={api}>
@@ -271,14 +277,126 @@ type RouterProps = {
 };
 
 const bh = createBrowserHistory();
-const BaseRouterContext = createContext<{ history: History }>({
+const BaseRouterContext = createContext<{
+    history: BrowserHistory;
+    send: Interpreter<any, any, BaseEvt>['send'];
+    service: any;
+}>({
+    send: null as any,
+    service: null,
     history: bh,
 });
+
+type BaseContext = {
+    matchers: Matcher[];
+};
+
+//prettier-ignore
+type BaseEvt =
+    | { type: '@external.TRIGGER_RESOLVE'; depth: number; exact: boolean; location: History['location']; action: History['action'] }
+    | { type: 'REGISTER'; matchers: Matcher[] }
+    | { type: 'UNREGISTER'; depth: number }
+    | { type: 'HISTORY_EVT'; location: History['location']; action: History['action'] };
+
+const baseMachine = Machine<BaseContext, Record<string, any>, BaseEvt>(
+    {
+        id: 'base-router',
+        initial: 'idle',
+        context: {
+            matchers: [],
+        },
+        states: {
+            idle: {},
+        },
+        on: {
+            HISTORY_EVT: { actions: 'notifyRouters' },
+            REGISTER: { actions: 'assignMatchers' },
+            UNREGISTER: { actions: 'removeMatchers' },
+        },
+    },
+    {
+        actions: {
+            assignMatchers: assign({
+                matchers: (ctx, evt) => {
+                    switch (evt.type) {
+                        case 'REGISTER':
+                            return ctx.matchers.concat(evt.matchers);
+                        default:
+                            return ctx.matchers;
+                    }
+                },
+            }),
+            removeMatchers: assign({
+                matchers: (ctx, evt) => {
+                    switch (evt.type) {
+                        case 'UNREGISTER':
+                            return ctx.matchers.filter((ctxM) => ctxM.depth !== evt.depth);
+                        default:
+                            return ctx.matchers;
+                    }
+                },
+            }),
+            notifyRouters: pure((ctx, evt) => {
+                switch (evt.type) {
+                    case 'HISTORY_EVT': {
+                        const location = evt.location;
+                        const action = evt.action;
+                        const depthFirstsorted = ctx.matchers.slice().sort((a, b) => b.depth - a.depth);
+                        const exactMatch = select({
+                            inputs: depthFirstsorted,
+                            pathname: location.pathname,
+                            exact: true,
+                        });
+
+                        if (exactMatch) {
+                            return send({
+                                type: '@external.TRIGGER_RESOLVE',
+                                depth: exactMatch.depth,
+                                exact: true,
+                                location,
+                                action,
+                            });
+                        }
+
+                        const noneExact = select({
+                            inputs: depthFirstsorted,
+                            pathname: location.pathname,
+                            exact: false,
+                        });
+
+                        if (noneExact) {
+                            return send({
+                                type: '@external.TRIGGER_RESOLVE',
+                                depth: noneExact.depth,
+                                exact: false,
+                                location,
+                                action,
+                            });
+                        }
+
+                        console.warn('no matching route found');
+                    }
+                }
+                return undefined;
+            }),
+        },
+    },
+);
+
 export function BaseRouter(props: PropsWithChildren<any>) {
-    const api = useMemo(() => {
-        return { history: bh };
+    const [state, send, service] = useMachine(baseMachine, { devTools: true });
+    useEffect(() => {
+        const unlisten = bh.listen(({ location, action }) => {
+            send({ type: 'HISTORY_EVT', location, action });
+        });
+        return () => {
+            unlisten();
+        };
     }, []);
-    return <BaseRouterContext.Provider value={api as any}>{props.children}</BaseRouterContext.Provider>;
+    const api = useMemo(() => {
+        return { history: bh, send, service };
+    }, [send, service]);
+    return <BaseRouterContext.Provider value={api}>{props.children}</BaseRouterContext.Provider>;
 }
 
 export function Outlet() {
@@ -289,14 +407,12 @@ export function Outlet() {
 export function useRouteData() {
     const { service } = useContext(RouterContext);
     const [state] = useService(service);
-    // console.log(state);
     return (state as any).context.routeData;
 }
 
 export function useResolveData() {
     const { service } = useContext(RouterContext);
     const [state] = useService(service);
-    // console.log(state);
     return (state as any).context.resolveData;
 }
 
@@ -316,17 +432,17 @@ export function Link(props: PropsWithChildren<any>) {
     );
 }
 
-export function guard(pathname: string, depth: number, segs: string[], parents: Array<string>): boolean {
-    const pathSegs = pathname.slice(1).split('/');
-    if (pathSegs.length < depth + 1) {
-        console.log('NOPE!');
-        return false;
-    }
-    const subSection = '/' + pathSegs.slice(0, depth + 1).join('/');
-    return segs.some((seg) => {
-        const joined = '/' + parents.concat(seg).join('/');
-        console.log('looking', joined);
-        const match = matchPath(pathname, joined);
-        return Boolean(match);
-    });
+interface Matcher {
+    path: string;
+    depth: number;
+}
+
+interface SelectParams {
+    inputs: Matcher[];
+    pathname: string;
+    exact: boolean;
+}
+
+export function select(inputs: SelectParams) {
+    return inputs.inputs.find((m) => matchPath(inputs.pathname, { path: m.path, exact: inputs.exact }));
 }

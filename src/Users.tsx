@@ -1,11 +1,11 @@
 import React from 'react';
 import { DataLoader, Link, Resolver, RouterProvider, useResolveData, useRouteData } from './Router';
 
-const waiter = () => new Promise((res) => setTimeout(res, 1000));
+const waiter = () => new Promise((res) => setTimeout(res, 200));
 
 const dataLoader1: DataLoader = (data) => {
     console.log('data loading', data);
-    return new Promise((res) => setTimeout(() => res([{ name: 'tshirt', price: 'here' }]), 1000));
+    return new Promise((res) => setTimeout(() => res([{ name: 'tshirt', price: 'here' }]), 200));
 };
 
 const resolver1: Resolver = async (location, depth) => {
@@ -13,7 +13,7 @@ const resolver1: Resolver = async (location, depth) => {
 
     const upto = location.pathname.slice(1).split('/');
     const sliced = upto[depth];
-    const match = (async () => {
+    const match = (() => {
         switch (sliced) {
             case 'orders':
                 return import('./Orders');

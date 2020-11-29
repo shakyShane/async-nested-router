@@ -2,10 +2,10 @@ import React from 'react';
 import { matchPath } from 'react-router';
 import { DataLoader, Link, Resolver, RouterProvider, useResolveData, useRouteData } from './Router';
 
-const waiter = () => new Promise((res) => setTimeout(res, 1000));
+const waiter = () => new Promise((res) => setTimeout(res, 200));
 
 const dataLoader1: DataLoader = (args) => {
-    return new Promise((res) => setTimeout(() => res([{ name: 'tshirt', price: 'here', id: args.params?.id }]), 1000));
+    return new Promise((res) => setTimeout(() => res([{ name: 'tshirt', price: 'here', id: args.params?.id }]), 200));
 };
 
 const resolver1: Resolver = async (loc) => {
