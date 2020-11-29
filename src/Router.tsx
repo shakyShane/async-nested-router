@@ -235,7 +235,7 @@ export function RouterProvider(props: PropsWithChildren<ProviderProps>) {
             const joined = '/' + parents.concat(seg).join('/');
             matchers.push({ depth: currentDepth, path: joined });
         });
-        debug('sending matchers %o', matchers);
+        // debug('sending matchers %o', matchers);
         baseRouterSend({ type: 'REGISTER', matchers });
         const listenBase = baseRouterService.subscribe((x: any) => {
             if (x.event.type === '@external.TRIGGER_RESOLVE') {

@@ -1,19 +1,42 @@
 import React from 'react';
 import './App.css';
-import { BaseRouter, Resolver, RouterProvider } from './Router';
+import { BaseRouter, DataLoader, Link, Resolver, RouterProvider } from './Router';
 import { inspect } from '@xstate/inspect';
 
 inspect({ iframe: false });
 
 const waiter = () => new Promise((res) => setTimeout(res, 200));
 
-const dataLoader1 = () => new Promise((res) => setTimeout(() => res({ name: 'shane' }), 200));
+const dataLoader1: DataLoader = (resolveData) => {
+    return new Promise((res) => setTimeout(() => res({ name: 'shane' }), 200));
+};
 
-const resolver1: Resolver = async (args) => {
-    console.log(args);
+const resolver1: Resolver = async (location, depth) => {
     await waiter();
+    const upto = location.pathname.slice(1).split('/');
+    const sliced = upto[depth];
+    const match = (() => {
+        if (location.pathname === '/') {
+            return import('./Home');
+        }
+        switch (sliced) {
+            case 'user':
+                return import('./Users');
+            default:
+                return undefined;
+        }
+    })();
+
+    if (!match) {
+        return {
+            query: {},
+            params: {},
+            status: 404,
+        };
+    }
+
     return {
-        component: (await import('./Users')).default,
+        component: (await match).default,
         query: {},
         params: {},
     };
@@ -22,16 +45,17 @@ const resolver1: Resolver = async (args) => {
 const fallback = () => 'please wait....';
 
 export default function App() {
-    const path = '/user/orders/12';
     return (
         <BaseRouter>
             <main>
-                <h1>Home</h1>
+                <p>
+                    <Link to={'/'}>Home</Link>
+                </p>
                 <RouterProvider
                     dataLoader={dataLoader1}
                     resolver={resolver1}
                     fallback={fallback}
-                    segs={['user']}
+                    segs={['user', '/']}
                     current={'user'}
                 />
                 {/*<Router>*/}

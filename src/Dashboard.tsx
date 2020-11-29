@@ -12,8 +12,8 @@ export function Dashboard() {
                     <Link to="/user/orders/13">orders</Link>
                 </li>
             </ul>
-            <pre>routeData: {JSON.stringify(data)}</pre>
-            <pre>resolveData: {JSON.stringify(resolve)}</pre>
+            <pre>routeData: {JSON.stringify(data, null, 2)}</pre>
+            <pre>resolveData: {JSON.stringify(resolve, null, 2)}</pre>
         </div>
     );
 }
