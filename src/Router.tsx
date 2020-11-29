@@ -360,13 +360,15 @@ const baseMachine = Machine<BaseContext, Record<string, any>, BaseEvt>(
                         });
 
                         if (exactMatch) {
-                            return send({
+                            const output = {
                                 type: '@external.TRIGGER_RESOLVE',
                                 depth: exactMatch.depth,
                                 exact: true,
                                 location,
                                 action,
-                            });
+                            };
+                            trace('exact match = %o', output);
+                            return send(output);
                         }
 
                         const noneExact = select({
@@ -376,13 +378,15 @@ const baseMachine = Machine<BaseContext, Record<string, any>, BaseEvt>(
                         });
 
                         if (noneExact) {
-                            return send({
+                            const output = {
                                 type: '@external.TRIGGER_RESOLVE',
                                 depth: noneExact.depth,
                                 exact: false,
                                 location,
                                 action,
-                            });
+                            };
+                            trace('none-exact match %o', output);
+                            return send(output);
                         }
 
                         console.warn('no matching route found');
