@@ -21,7 +21,6 @@ const resolver1: Resolver = async (loc) => {
     const match = matchPath(loc.pathname, '/user/orders/:id');
     await waiter();
     if (!match) {
-        console.log('jere!');
         return {
             query: {},
             params: {},

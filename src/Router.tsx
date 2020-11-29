@@ -349,7 +349,10 @@ const baseMachine = Machine<BaseContext, Record<string, any>, BaseEvt>(
                     case 'HISTORY_EVT': {
                         const location = evt.location;
                         const action = evt.action;
-                        const depthFirstsorted = ctx.matchers.slice().sort((a, b) => b.depth - a.depth);
+                        const segLength = location.pathname.slice(1).split('/').length;
+                        const depthFirstsorted = ctx.matchers
+                            .filter((x) => x.depth + 1 <= segLength)
+                            .sort((a, b) => b.depth - a.depth);
                         const exactMatch = select({
                             inputs: depthFirstsorted,
                             pathname: location.pathname,
@@ -452,5 +455,12 @@ interface SelectParams {
 }
 
 export function select(inputs: SelectParams) {
-    return inputs.inputs.find((m) => matchPath(inputs.pathname, { path: m.path, exact: inputs.exact }));
+    trace('considering %o', inputs);
+    return inputs.inputs.find((m) => {
+        const input = { path: m.path, exact: inputs.exact };
+        trace('[select] ? pathname=%o vs %o', inputs.pathname, input);
+        const res = matchPath(inputs.pathname, input);
+        trace('[select] = %o', res);
+        return res;
+    });
 }
