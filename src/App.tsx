@@ -21,7 +21,7 @@ const resolver1: Resolver = async (location, depth) => {
         }
         switch (sliced) {
             case 'user':
-                return import('./Users');
+                return import('./User');
             default:
                 return undefined;
         }

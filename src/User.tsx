@@ -5,7 +5,6 @@ import classes from './Users.module.css';
 const waiter = () => new Promise((res) => setTimeout(res, 200));
 
 const dataLoader1: DataLoader = (data) => {
-    console.log('data loading', data);
     return new Promise((res) => setTimeout(() => res([{ name: 'tshirt', price: 'here' }]), 200));
 };
 
@@ -40,7 +39,7 @@ const resolver1: Resolver = async (location, depth) => {
 
 const fallback = () => 'please wait....';
 
-export function UsersPage() {
+export function UserPage() {
     const data = useRouteData();
     const resolve = useResolveData();
     return (
@@ -52,7 +51,7 @@ export function UsersPage() {
                 <div className={classes.sidebar}>
                     <ul>
                         <li>
-                            <Link to={'/user/dashboard'}>dashboard</Link>
+                            <Link to={'/user'}>dashboard</Link>
                         </li>
                         <li>
                             <Link to={'/user/orders'}>orders</Link>
@@ -60,17 +59,19 @@ export function UsersPage() {
                     </ul>
                 </div>
                 <div className={classes.content}>
-                    <RouterProvider
-                        dataLoader={dataLoader1}
-                        resolver={resolver1}
-                        fallback={fallback}
-                        segs={['orders', 'dashboard']}
-                        current={'orders'}
-                    />
+                    {data.loading === false && (
+                        <RouterProvider
+                            dataLoader={dataLoader1}
+                            resolver={resolver1}
+                            fallback={fallback}
+                            segs={['orders', 'dashboard']}
+                            current={'orders'}
+                        />
+                    )}
                 </div>
             </div>
         </div>
     );
 }
 
-export default UsersPage;
+export default UserPage;

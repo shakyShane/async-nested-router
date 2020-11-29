@@ -9,7 +9,7 @@ export function Dashboard() {
             <h1>Dashboard</h1>
             <ul>
                 <li>
-                    <Link to="/user/orders/13">orders</Link>
+                    <Link to="/user/orders/13">Order 13</Link>
                 </li>
             </ul>
             <pre>routeData: {JSON.stringify(data, null, 2)}</pre>

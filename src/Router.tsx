@@ -8,6 +8,7 @@ import { matchPath } from 'react-router';
 import debugpkg from 'debug';
 import { pure } from 'xstate/lib/actions';
 const debug = debugpkg('router');
+const trace = debugpkg('router:trace');
 
 type Context = {
     location: History['location'];
@@ -57,8 +58,8 @@ const createRouterMachine = (
     location: History['location'],
     resolver?: Resolver,
     dataLoader?: DataLoader,
-) =>
-    Machine<Context, Record<string, any>, Events>(
+) => {
+    return Machine<Context, Record<string, any>, Events>(
         {
             id,
             initial: 'resolving',
@@ -121,7 +122,7 @@ const createRouterMachine = (
                     if (!resolver) {
                         return null;
                     }
-                    const subject = (() => {
+                    const location = (() => {
                         switch (evt.type) {
                             case 'xstate.init':
                                 return ctx.location;
@@ -129,7 +130,15 @@ const createRouterMachine = (
                                 return evt.location;
                         }
                     })();
-                    const output = await resolver(subject, ctx.depth);
+                    trace(
+                        '--> pathname=%o, current=%o depth=%o parents=%o',
+                        location.pathname,
+                        ctx.current,
+                        ctx.depth,
+                        ctx.parents,
+                    );
+                    const output = await resolver(location, ctx.depth);
+                    trace('++ resolved %o', output);
                     return output;
                 },
                 loadData: async (ctx, evt) => {
@@ -137,6 +146,7 @@ const createRouterMachine = (
                         return null;
                     }
                     const output = await dataLoader(ctx.resolveData.data);
+                    trace('output from loadData = %o', output);
                     return output;
                 },
             },
@@ -184,6 +194,7 @@ const createRouterMachine = (
             },
         },
     );
+};
 
 export const RouterContext = createContext<{
     send: any;
@@ -262,9 +273,6 @@ export function RouterProvider(props: PropsWithChildren<ProviderProps>) {
 
     return (
         <RouterContext.Provider value={api}>
-            <pre>
-                <code>value: {state.value}</code>
-            </pre>
             {state.context.component ? React.createElement(state.context.component) : null}
             {props.children}
         </RouterContext.Provider>
@@ -392,7 +400,7 @@ export function BaseRouter(props: PropsWithChildren<any>) {
         return () => {
             unlisten();
         };
-    }, []);
+    }, [send]);
     const api = useMemo(() => {
         return { history: bh, send, service };
     }, [send, service]);

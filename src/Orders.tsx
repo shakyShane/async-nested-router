@@ -5,16 +5,34 @@ import { DataLoader, Link, Resolver, RouterProvider, useResolveData, useRouteDat
 const waiter = () => new Promise((res) => setTimeout(res, 200));
 
 const dataLoader1: DataLoader = (args) => {
-    return new Promise((res) => setTimeout(() => res([{ name: 'tshirt', price: 'here', id: args.params?.id }]), 200));
+    return new Promise((res) =>
+        setTimeout(
+            () =>
+                res({
+                    items: [{ name: 'tshirt', price: 'here' }],
+                    id: args.params?.id,
+                }),
+            200,
+        ),
+    );
 };
 
 const resolver1: Resolver = async (loc) => {
-    const output = matchPath(loc.pathname, '/user/orders/:id');
+    const match = matchPath(loc.pathname, '/user/orders/:id');
     await waiter();
+    if (!match) {
+        console.log('jere!');
+        return {
+            query: {},
+            params: {},
+            status: 404,
+        };
+    }
+    console.log('here');
     return {
         component: (await import('./Order')).default,
         query: {},
-        params: output ? output.params : {},
+        params: match ? match.params : {},
     };
 };
 
@@ -26,13 +44,8 @@ export function UsersPage() {
     return (
         <div style={{ padding: '20px', border: '1px dotted red' }}>
             <h1>Orders Page</h1>
-            <ul>
-                <li>
-                    <Link to="/user/dashboard">Dashboard</Link>
-                </li>
-            </ul>
-            <pre>resolveData: {JSON.stringify(resolve)}</pre>
-            <pre>routeData: {JSON.stringify(data)}</pre>
+            <pre>resolveData: {JSON.stringify(resolve, null, 2)}</pre>
+            <pre>routeData: {JSON.stringify(data, null, 2)}</pre>
             <ul>
                 <li>
                     <Link to={'/user/orders/13'}>Order 13</Link>
