@@ -1,4 +1,4 @@
-import React, { useCallback, useEffect, useState } from 'react';
+import React, { useCallback, useEffect, useRef, useState } from 'react';
 import { assign, DoneInvokeEvent, Interpreter, Machine, send } from 'xstate';
 import { v4 as uuidv4 } from 'uuid';
 import { useMachine, useService } from '@xstate/react';
@@ -32,7 +32,7 @@ type Context = {
 // prettier-ignore
 type Events =
     | { type: "xstate.init"; }
-    | { type: "HISTORY_EVT"; location: History["location"] }
+    | { type: "HISTORY_EVT"; location: History["location"]; depth: number };
 
 export type Resolver = (location: History['location'], depth: number) => Promise<ResolveResult>;
 
@@ -88,6 +88,7 @@ const createRouterMachine = (
                 HISTORY_EVT: [{ target: 'resolving', cond: 'matchedDepth' }],
             },
             states: {
+                invalid: {},
                 resolving: {
                     entry: ['assignResolveLoading'],
                     invoke: {
@@ -130,6 +131,10 @@ const createRouterMachine = (
                                 return evt.location;
                         }
                     })();
+                    if (!location) {
+                        trace('location data not found in event');
+                        return null;
+                    }
                     trace(
                         '--> pathname=%o, current=%o depth=%o parents=%o',
                         location.pathname,
@@ -139,7 +144,7 @@ const createRouterMachine = (
                     );
                     const output = await resolver(location, ctx.depth);
                     trace('++ resolved %o', output);
-                    return output;
+                    return { ...output, location };
                 },
                 loadData: async (ctx, evt) => {
                     if (!dataLoader) {
@@ -196,6 +201,8 @@ const createRouterMachine = (
     );
 };
 
+const defaultParents: string[] = [];
+
 export const RouterContext = createContext<{
     send: any;
     service: any;
@@ -205,7 +212,7 @@ export const RouterContext = createContext<{
     send: null,
     service: null,
     prev: 0,
-    parents: [],
+    parents: defaultParents,
 });
 
 type ProviderProps = {
@@ -237,7 +244,6 @@ export function RouterProvider(props: PropsWithChildren<ProviderProps>) {
 
     const [state, send, service] = useMachine(machine, {
         devTools: true,
-        parent: parentService,
     });
 
     useEffect(() => {
@@ -250,8 +256,8 @@ export function RouterProvider(props: PropsWithChildren<ProviderProps>) {
         baseRouterSend({ type: 'REGISTER', matchers });
         const listenBase = baseRouterService.subscribe((x: any) => {
             if (x.event.type === '@external.TRIGGER_RESOLVE') {
-                if (x.event.depth === currentDepth) {
-                    send({ type: 'HISTORY_EVT', location: x.event.location });
+                if (x.event.depth <= currentDepth) {
+                    send({ type: 'HISTORY_EVT', location: x.event.location, depth: x.event.depth });
                 }
             }
         });
@@ -262,14 +268,16 @@ export function RouterProvider(props: PropsWithChildren<ProviderProps>) {
         };
     }, [baseRouterSend, baseRouterService, currentDepth, parents, segs, send]);
 
+    const baseParents = useMemo(() => parents.concat(props.current), [parents, props]);
+
     const api = useMemo(() => {
         return {
             send,
             service,
             prev: currentDepth,
-            parents: parents.concat(props.current),
+            parents: baseParents,
         };
-    }, [send, service, currentDepth, parents, props]);
+    }, [send, service, currentDepth, baseParents]);
 
     return (
         <RouterContext.Provider value={api}>
@@ -327,8 +335,10 @@ const baseMachine = Machine<BaseContext, Record<string, any>, BaseEvt>(
             assignMatchers: assign({
                 matchers: (ctx, evt) => {
                     switch (evt.type) {
-                        case 'REGISTER':
-                            return ctx.matchers.concat(evt.matchers);
+                        case 'REGISTER': {
+                            const matches = ctx.matchers.concat(evt.matchers);
+                            return matches;
+                        }
                         default:
                             return ctx.matchers;
                     }
@@ -337,8 +347,9 @@ const baseMachine = Machine<BaseContext, Record<string, any>, BaseEvt>(
             removeMatchers: assign({
                 matchers: (ctx, evt) => {
                     switch (evt.type) {
-                        case 'UNREGISTER':
+                        case 'UNREGISTER': {
                             return ctx.matchers.filter((ctxM) => ctxM.depth !== evt.depth);
+                        }
                         default:
                             return ctx.matchers;
                     }
@@ -350,9 +361,11 @@ const baseMachine = Machine<BaseContext, Record<string, any>, BaseEvt>(
                         const location = evt.location;
                         const action = evt.action;
                         const segLength = location.pathname.slice(1).split('/').length;
+
                         const depthFirstsorted = ctx.matchers
                             .filter((x) => x.depth + 1 <= segLength)
                             .sort((a, b) => b.depth - a.depth);
+
                         const exactMatch = select({
                             inputs: depthFirstsorted,
                             pathname: location.pathname,

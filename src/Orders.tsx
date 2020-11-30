@@ -27,7 +27,6 @@ const resolver1: Resolver = async (loc) => {
             status: 404,
         };
     }
-    console.log('here');
     return {
         component: (await import('./Order')).default,
         query: {},
@@ -36,8 +35,9 @@ const resolver1: Resolver = async (loc) => {
 };
 
 const fallback = () => 'please wait....';
+const segs = [':id'];
 
-export function UsersPage() {
+export function OrdersPage() {
     const data = useRouteData();
     const resolve = useResolveData();
     return (
@@ -57,11 +57,11 @@ export function UsersPage() {
                 dataLoader={dataLoader1}
                 resolver={resolver1}
                 fallback={fallback}
-                segs={[':id']}
-                current={':id'}
+                segs={segs}
+                current={segs[0]}
             />
         </div>
     );
 }
 
-export default UsersPage;
+export default OrdersPage;

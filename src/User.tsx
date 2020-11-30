@@ -16,7 +16,6 @@ const resolver1: Resolver = async (location, depth) => {
         switch (sliced) {
             case 'orders':
                 return import('./Orders');
-            //     ;
             default:
                 return import('./Dashboard');
         }
@@ -38,6 +37,7 @@ const resolver1: Resolver = async (location, depth) => {
 };
 
 const fallback = () => 'please wait....';
+const segs = ['orders', 'dashboard'];
 
 export function UserPage() {
     const data = useRouteData();
@@ -59,15 +59,13 @@ export function UserPage() {
                     </ul>
                 </div>
                 <div className={classes.content}>
-                    {data.loading === false && (
-                        <RouterProvider
-                            dataLoader={dataLoader1}
-                            resolver={resolver1}
-                            fallback={fallback}
-                            segs={['orders', 'dashboard']}
-                            current={'orders'}
-                        />
-                    )}
+                    <RouterProvider
+                        dataLoader={dataLoader1}
+                        resolver={resolver1}
+                        fallback={fallback}
+                        segs={segs}
+                        current={segs[0]}
+                    />
                 </div>
             </div>
         </div>

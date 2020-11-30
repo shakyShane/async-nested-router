@@ -43,6 +43,7 @@ const resolver1: Resolver = async (location, depth) => {
 };
 
 const fallback = () => 'please wait....';
+const segs = ['user', '/'];
 
 export default function App() {
     return (
@@ -55,8 +56,8 @@ export default function App() {
                     dataLoader={dataLoader1}
                     resolver={resolver1}
                     fallback={fallback}
-                    segs={['user', '/']}
-                    current={'user'}
+                    segs={segs}
+                    current={segs[0]}
                 />
                 {/*<Router>*/}
                 {/*    <OrdersPage name={'first'} />*/}
