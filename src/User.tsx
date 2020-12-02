@@ -59,13 +59,7 @@ export function UserPage() {
                     </ul>
                 </div>
                 <div className={classes.content}>
-                    <RouterProvider
-                        dataLoader={dataLoader1}
-                        resolver={resolver1}
-                        fallback={fallback}
-                        segs={segs}
-                        current={segs[0]}
-                    />
+                    <RouterProvider dataLoader={dataLoader1} resolver={resolver1} fallback={fallback} segs={segs} />
                 </div>
             </div>
         </div>

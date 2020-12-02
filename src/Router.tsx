@@ -15,7 +15,6 @@ type Context = {
     depth: number;
     parents: Array<string>;
     segs: string[];
-    current: string;
     component: null | any;
     resolveData: {
         loading: boolean;
@@ -52,7 +51,6 @@ type ResolveData = {
 const createRouterMachine = (
     id: string,
     parents: Array<string>,
-    current: string,
     segs: string[],
     depth: number,
     location: History['location'],
@@ -67,7 +65,6 @@ const createRouterMachine = (
                 location,
                 depth: depth,
                 segs,
-                current,
                 parents,
                 component: null,
                 resolveData: {
@@ -135,13 +132,7 @@ const createRouterMachine = (
                         trace('location data not found in event');
                         return null;
                     }
-                    trace(
-                        '--> pathname=%o, current=%o depth=%o parents=%o',
-                        location.pathname,
-                        ctx.current,
-                        ctx.depth,
-                        ctx.parents,
-                    );
+                    trace('--> pathname=%o, depth=%o parents=%o', location.pathname, ctx.depth, ctx.parents);
                     const output = await resolver(location, ctx.depth);
                     trace('++ resolved %o', output);
                     return { ...output, location };
@@ -220,27 +211,25 @@ type ProviderProps = {
     resolver?: Resolver;
     fallback?: () => React.ReactNode;
     segs: string[];
-    current: string;
 };
 const noopDataLoader = () => Promise.resolve({});
 const noopResolver = () => Promise.resolve({});
 export function RouterProvider(props: PropsWithChildren<ProviderProps>) {
-    const { dataLoader = noopDataLoader, resolver, segs, current } = props;
+    const { dataLoader = noopDataLoader, resolver, segs } = props;
     const { history, service: baseRouterService, send: baseRouterSend } = useContext(BaseRouterContext);
     const { send: parentSend, service: parentService, prev, parents } = useContext(RouterContext);
     const currentDepth = parentSend === null ? 0 : prev + 1;
     const machine = useMemo(() => {
         return createRouterMachine(
-            `router-${current}-${uuidv4().slice(0, 6)}`,
+            `router-${currentDepth}-${uuidv4().slice(0, 6)}`,
             parents,
-            current,
             segs,
             currentDepth,
             history.location,
             resolver,
             dataLoader,
         );
-    }, [currentDepth, dataLoader, history.location, parents, resolver, segs, current]);
+    }, [currentDepth, dataLoader, history.location, parents, resolver, segs]);
 
     const [state, send, service] = useMachine(machine, {
         devTools: true,
@@ -268,7 +257,15 @@ export function RouterProvider(props: PropsWithChildren<ProviderProps>) {
         };
     }, [baseRouterSend, baseRouterService, currentDepth, parents, segs, send]);
 
-    const baseParents = useMemo(() => parents.concat(props.current), [parents, props]);
+    const baseParents = useMemo(() => {
+        const urlSegs = [...history.location.pathname.slice(1).split('/')].filter(Boolean);
+        const subject = urlSegs[currentDepth];
+        const match = history.location.pathname === '/' ? '/' : segs.find((seg) => subject === seg);
+        if (match) {
+            return parents.concat(match);
+        }
+        return parents;
+    }, [history.location.pathname, currentDepth, segs, parents]);
 
     const api = useMemo(() => {
         return {

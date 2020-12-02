@@ -57,7 +57,6 @@ export default function App() {
                     resolver={resolver1}
                     fallback={fallback}
                     segs={segs}
-                    current={segs[0]}
                 />
                 {/*<Router>*/}
                 {/*    <OrdersPage name={'first'} />*/}

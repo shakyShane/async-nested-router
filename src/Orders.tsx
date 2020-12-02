@@ -53,13 +53,7 @@ export function OrdersPage() {
                     <Link to={'/user/orders/12'}>Order 12</Link>
                 </li>
             </ul>
-            <RouterProvider
-                dataLoader={dataLoader1}
-                resolver={resolver1}
-                fallback={fallback}
-                segs={segs}
-                current={segs[0]}
-            />
+            <RouterProvider dataLoader={dataLoader1} resolver={resolver1} fallback={fallback} segs={segs} />
         </div>
     );
 }
